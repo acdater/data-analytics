@@ -1,0 +1,25 @@
+# Python
+**/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local data
+**/data/raw/
+**/data/generated/
+**/*.sqlite
+**/*.db
+
+# Editor / macOS
+.DS_Store
+.vscode/
+.idea/
