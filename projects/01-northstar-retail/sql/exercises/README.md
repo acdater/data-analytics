@@ -1,10 +1,10 @@
-# SQL Exercises
+# SQL Analysis
 
-Use the Northstar database and the data dictionary to investigate questions such as:
+I used SQL to explore the database, check order-item calculations and investigate category sales, costs, discounts and gross margin.
 
-- How do order volume and merchandise sales vary over time?
-- How do product categories and customer groups differ in purchasing behavior?
-- How do cancellations, discounts, and returns affect the metrics you choose?
-- How does marketing spend vary by source and month, and what additional evidence would be needed to assess efficiency?
+- [Table investigation](tables_investigation.sql): inspect tables and row counts.
+- [Analysis queries](02-analysis.sql): exploratory queries and financial checks, with many saved as commented blocks.
 
-Define your population, date range, and treatment of discounts, cancellations, taxes, shipping, and refunds before comparing results. There are no provided answer queries; write and validate your own SQL.
+Connect a SQL client to the [local PostgreSQL database](../../README.md) and run individual queries; uncomment the blocks you want to review. Use the [data dictionary](../../database/DATA_DICTIONARY.md) for field definitions.
+
+These are exploration notes. The final status and returns adjustments are in the [organized Python notebook](../../notebooks/01-profitability-eda-organized.ipynb).

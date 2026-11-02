@@ -1,6 +1,36 @@
 # Northstar Retail Analytics
 
-Northstar Retail is a fictional multi-category e-commerce business. Use its local PostgreSQL dataset to investigate management's concern that revenue is growing while profitability may be changing. The dataset is synthetic and deterministic; it contains no real customer information.
+An end-to-end profitability investigation for a fictional e-commerce company. I used PostgreSQL, SQL, Python and Tableau to understand why sales grew in 2025 while gross profit fell.
+
+## Business Problem
+
+Northstar Retail wanted to understand how COGS, pricing, discounts and product categories affected profitability across 2024-2025. The goal was to identify margin pressure and support pricing, procurement and product portfolio decisions.
+
+## Work Completed
+
+- Built a reproducible PostgreSQL dataset and checked data quality with SQL.
+- Used Python to investigate sales, costs, discounts, category mix and returns.
+- Exported monthly and category profitability datasets for Tableau.
+- Built a dashboard with YoY KPIs, monthly trends and category comparisons.
+
+## Key Findings
+
+| Metric | 2025 | Change vs 2024 |
+| --- | --- | --- |
+| Net sales | 980.7K | +8.14% |
+| COGS | 697.4K | +14.69% |
+| Gross profit | 283.3K | -5.19% |
+| Gross margin | 28.89% | -4.06 pp |
+
+Costs grew faster than sales. The exploratory category analysis suggests that most margin pressure came from within categories, rather than a shift in sales mix. Next steps: compare prices and costs for the same products, review discount effectiveness and prioritize categories with margin improvement potential.
+
+These are scenario results: delivered orders only, refunds assigned to the original order period, and an assumed 80% recovery of returned inventory cost. Taxes and shipping are excluded. The data is synthetic, not real company performance.
+
+## Review the Project
+
+1. Start with the [organized Python notebook](notebooks/01-profitability-eda-organized.ipynb) for the analysis, checks and conclusions.
+2. Open the [Tableau dashboard](tableau/01-northstart-retail-dashboard.twbx) in Tableau Desktop to review KPIs, trends and category performance.
+3. Review the [SQL analysis](sql/exercises/README.md), [exported datasets](data/processed/) and [data dictionary](database/DATA_DICTIONARY.md) for supporting work.
 
 ## Quick Start
 
@@ -13,48 +43,27 @@ make start
 make init
 make seed
 make validate
+uv run jupyter lab
 ```
 
-`make seed` also starts the database and reapplies the idempotent schema. Seeding replaces the rows in all eight Northstar tables with the same generated dataset each time. It does not recreate or delete the Docker volume.
+Select the project Python environment in Jupyter and run the organized notebook from top to bottom. `make seed` replaces rows in all eight project tables with the same generated dataset; it preserves the Docker volume.
 
-## Lifecycle Commands
+## Database Commands
 
 | Command | Effect |
 | --- | --- |
-| `make setup` | Install the locked project environment with uv. |
-| `make start` | Start PostgreSQL and wait for its health check. |
-| `make stop` | Stop the database while preserving its volume. |
-| `make logs` | Follow PostgreSQL logs. Press Ctrl-C to stop following logs. |
-| `make init` | Apply the repeatable schema to the running database. |
-| `make seed` | Replace training rows with the fixed-seed dataset. |
-| `make validate` | Check connectivity, row counts, relationships and financial arithmetic. |
-| `make reset` | Stop and remove this Compose project and its named database volume. |
+| `make setup` | Install the locked environment. |
+| `make start` / `make stop` | Start or stop PostgreSQL, keeping its data. |
+| `make logs` | Follow database logs. |
+| `make init` | Apply the repeatable schema. |
+| `make seed` | Replace project data with the fixed-seed dataset. |
+| `make validate` | Check row counts, relationships and financial arithmetic. |
+| `make reset` | Permanently remove the project database and its volume. |
 
-`make reset` permanently removes the Northstar database data. It is intentionally separate from `make stop` and `make seed`. The Compose project and volume are named for Northstar; these commands do not target other Compose projects.
+## Connection Details
 
-## External Connections
+For pgAdmin or Tableau's PostgreSQL connector, use host `127.0.0.1`, port `5433`, database `northstar_retail`, and the credentials in `.env`. Install Tableau's PostgreSQL driver if prompted. This database is for local use only; do not expose it to a network or commit credentials.
 
-The database is available only on the local machine at `127.0.0.1:5433`.
+## Project Notes
 
-**pgAdmin:** Register a server using host `127.0.0.1`, port `5433`, database `northstar_retail`, and the username/password in `.env`. Set maintenance database to `northstar_retail`; SSL can be disabled for this local simulation.
-
-**Tableau Desktop:** Choose the PostgreSQL connector and use the same host, port, database, username, and password. Install Tableau's PostgreSQL driver separately if Tableau prompts for it. Do not expose this development database to a network.
-
-## Database
-
-PostgreSQL 18 stores eight related tables. `database/schema.sql` defines primary keys, foreign keys, checks, uniqueness constraints and indexes. See [the data dictionary](database/DATA_DICTIONARY.md) for table and field descriptions.
-
-The schema covers customers, product categories and products, orders and order lines, payment events, returns, and monthly marketing spend. Prices and costs on order lines are snapshots; product catalog values represent the current catalog. Timestamps span January 2024 through December 2025.
-
-## Reproducibility
-
-The generator uses NumPy seed `20261025`; generated rows are created in Python and inserted transactionally. Rerunning `make seed` produces the same row content and keys. No generated dataset is stored in Git. Runtime credentials belong in ignored `.env`; `.env.example` contains local-only sample values. Change the sample password before using the setup outside a private development machine.
-
-## Learning Materials
-
-- [SQL exercise prompts](sql/exercises/README.md)
-- [Notebook workspace](notebooks/README.md)
-- [Reports workspace](reports/README.md)
-- [Tableau workspace](tableau/README.md)
-
-The prompts are intentionally open-ended. There are no completed analytical queries, report conclusions, dashboards, or notebook solutions in this project.
+PostgreSQL 18 holds eight related tables covering orders, products, customers, payments, returns and marketing spend. The generator uses seed `20261025` for repeatable results. Raw database rows are generated locally; the two reporting CSVs are included in [data/processed](data/processed/).

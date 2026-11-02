@@ -1,3 +1,7 @@
 # Synthetic Data Seed
 
-The deterministic generator lives in `src/northstar_retail_analytics/seed.py`. It creates data in memory and writes it to PostgreSQL; it does not export or commit generated files. Run it with `make seed` from the project root. The command replaces rows only in the Northstar training tables.
+The [Python generator](../../src/northstar_retail_analytics/seed.py) creates the synthetic PostgreSQL dataset used in this project. A fixed seed (`20261025`) makes the results repeatable; no real customer data is used.
+
+After the [project setup](../../README.md), run `make seed` from the project root, then `make validate`. Seeding replaces rows in all eight Northstar tables and preserves the database volume.
+
+Raw data is generated locally. The notebook's reporting exports are included in [data/processed](../../data/processed/).
