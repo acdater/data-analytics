@@ -29,7 +29,7 @@ These are scenario results: delivered orders only, refunds assigned to the origi
 ## Review the Project
 
 1. Start with the [organized Python notebook](notebooks/01-profitability-eda-organized.ipynb) for the analysis, checks and conclusions.
-2. Open the [Tableau dashboard](tableau/01-northstart-retail-dashboard.twbx) in Tableau Desktop to review KPIs, trends and category performance.
+2. View the [interactive dashboard on Tableau Public](https://public.tableau.com/app/profile/alexei3256/viz/NorthstarRetailProfitabilityAnalysis20242025/NorthstarProfitabilityOverview) to review KPIs, trends and category performance, or open the [packaged workbook](tableau/01-northstart-retail-dashboard.twbx) in Tableau Desktop.
 3. Review the [SQL analysis](sql/exercises/README.md), [exported datasets](data/processed/) and [data dictionary](database/DATA_DICTIONARY.md) for supporting work.
 
 ## Quick Start
