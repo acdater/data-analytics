@@ -164,7 +164,7 @@ One authoritative attempt within a session. PK: attempt_id. FKs: (session_id, re
 
 | Column | Type | Nullable | Business meaning |
 | --- | --- | --- | --- |
-| `attempt_id` | `BIGINT` | No | Stable attempt identifier: session_id × 10 + attempt_number. |
+| `attempt_id` | `BIGINT` | No | Stable attempt identifier: session_id × 1,000 + attempt_number. |
 | `session_id` | `BIGINT` | No | Stable session identifier: player_id × 1,000 + session_number. |
 | `release_id` | `INTEGER` | No | Platform-specific release identifier. |
 | `level_id` | `INTEGER` | No | Sequential level number, starting at one. |
@@ -203,7 +203,7 @@ One received, deduplicated source event. PK: event_id. FK: session_id → sessio
 | `event_timestamp` | `TIMESTAMPTZ` | No | UTC occurrence/emission time within its session. |
 | `received_at` | `TIMESTAMPTZ` | No | UTC collector receipt, at or after event time; may be up to 72 hours later. |
 | `event_type` | `TEXT` | No | One of the 13 documented event names. |
-| `attempt_id` | `BIGINT` | Yes | Stable attempt identifier: session_id × 10 + attempt_number. |
+| `attempt_id` | `BIGINT` | Yes | Stable attempt identifier: session_id × 1,000 + attempt_number. |
 | `purchase_id` | `BIGINT` | Yes | Transaction identifier; this generator allows at most one per session and uses session_id. |
 | `properties` | `JSONB` | No | Versioned event payload; see event taxonomy for exact required keys and types. |
 
@@ -229,4 +229,4 @@ Campaigns can acquire many players and have daily spend. Players have many sessi
 
 Local DDL constraints enforce allowed categories, positive amounts, nonnegative revenue, timestamp ordering within records, and uniqueness. Cross-record chronology, release availability, progression, payload consistency, experiment coverage, and money reconciliation are checked by `make validate`. A completed session can lack an end event; an interrupted session always lacks one. See [data quality](data-quality.md) for intentional missingness and [event taxonomy](event-taxonomy.md) for payload contracts.
 
-`level_configurations.time_limit_seconds` bounds completed and failed attempts. Abandoned attempts end at the authoritative interruption boundary, which can include idle time; they do not imply time-limit completion. The generator currently caps histories at 400 sessions and the catalog at 100 levels; these are simulator limits, not inferred business rules.
+`level_configurations.time_limit_seconds` bounds all attempt durations. Abandoned attempts end early at a simulated combat interruption; they do not imply time-limit completion. The generator currently caps histories at 400 sessions and the catalog at 100 levels; these are simulator limits, not inferred business rules.

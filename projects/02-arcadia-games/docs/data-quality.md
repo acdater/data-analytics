@@ -29,3 +29,11 @@ Nulls, late arrivals, and documented omissions are intentional imperfections. In
 The generator uses one transaction and validates before commit. The validator streams JSON payloads through a server-side cursor. Tests inject invalid values and malformed telemetry, compare repeated generation and multiple batch sizes, and simulate interruption during replacement.
 
 Row-count ranges are broad smoke checks, not proof of behavioral realism or experiment significance. Small samples can lack statistical power. Observation-window censoring, incomplete attribution, and the distinction between assignment and exposure remain analysis decisions for the learner.
+
+## Generator distribution checks
+
+`make validate` also runs generation-quality checks from `config/behavior.toml`, using bounded histograms rather than loading every event into memory. These checks detect collapsed session durations, excessive repeated values, weak variation, missing short or long sessions, implausible tails, and fixed attempt/checkout timings. Duration statistics are reported in seconds. They describe generator output, not a business conclusion.
+
+The population checks require at least 1,000 sessions. New-player versus established-session checks require at least 250 observations in each group; checkout variation requires 50 resolved transactions. Smaller samples explicitly report skipped checks, not evidence of a segment effect. The broad segment tolerance is a generator sanity check, not a statistical significance test. The controlled engagement test uses synthetic timing draws at matched progression and history, rather than interpreting observational segmentation as causal evidence.
+
+The timing model draws continuous values then rounds to integer seconds to preserve the schema. Session ends follow the action timeline; there is no independent duration reassignment. Newly generated identifiers and content checksums are reproducible within generator version 1.1.0 and its fixed configuration, but are not intended to reproduce version 1.0.0 rows. The attempt identifier multiplier is now 1,000 to avoid collisions when long sessions have more than nine attempts.

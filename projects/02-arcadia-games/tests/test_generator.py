@@ -51,6 +51,7 @@ def test_player_histories_and_event_sequences(sample):
         pid = session["player_id"]
         assert session["started_at"] >= players[pid]["registered_at"]
         assert session["ended_at"] > session["started_at"]
+        assert (session["ended_at"]-session["started_at"]).total_seconds() == session["duration_seconds"]
         assert session["started_at"] >= previous_session.get(pid, players[pid]["registered_at"])
         previous_session[pid] = session["ended_at"]
     level = defaultdict(lambda: 1)
@@ -90,7 +91,12 @@ def test_experiment_assignment_precedes_exposure(sample):
 def test_currency_normalization(sample):
     from arcadia.generator.catalog import money
     rates = {(r["rate_date"], r["currency"]): r["usd_per_unit"] for r in sample["exchange_rates"]}
+    sessions = {r["session_id"]: r for r in sample["sessions"]}
     for purchase in sample["purchases"]:
+        session = sessions[purchase["session_id"]]
+        assert session["started_at"] <= purchase["initiated_at"] <= session["ended_at"]
+        if purchase["resolved_at"] is not None:
+            assert purchase["initiated_at"] < purchase["resolved_at"] <= session["ended_at"]
         expected = money(purchase["amount"]*rates[(purchase["rate_date"], purchase["currency"])]) if purchase["status"] == "completed" else 0
         assert purchase["revenue_usd"] == expected
 

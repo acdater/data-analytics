@@ -19,7 +19,7 @@ make validate
 make test-integration
 ```
 
-`make seed` generates the **1,000-player development profile** for `[2025-01-01, 2026-01-01)` UTC. It refuses to overwrite populated tables. The command validates before committing and prints counts, a deterministic content checksum, elapsed time, and Python peak memory. Re-running `make init` is safe with this schema version; it does not migrate an existing schema to a different version.
+`make seed` generates the **1,000-player development profile** for `[2025-01-01, 2026-01-01)` UTC. It refuses to overwrite populated tables. The command validates before committing and prints counts, a deterministic content checksum, elapsed time, Python peak memory, and session-duration quality diagnostics. Re-running `make init` is safe with this schema version; it does not migrate an existing schema to a different version.
 
 To deliberately regenerate project data:
 

@@ -4,7 +4,7 @@ from pathlib import Path
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[3]
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 @dataclass(frozen=True)
 class Config:

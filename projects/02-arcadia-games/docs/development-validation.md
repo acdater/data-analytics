@@ -1,6 +1,8 @@
-# Development verification
+# Development verification — generator 1.1.0
 
-Verified on November 9, 2026 with Python 3.12.14, locked dependencies, and the isolated PostgreSQL 18 Docker service. Observation window: `[2025-01-01, 2026-01-01)` UTC. Profile: development; seed: 20261109; generator version: 1.0.0.
+Verified on November 9, 2026 with Python 3.12.14, locked dependencies, and the isolated PostgreSQL 18 Docker service. Profile: development; 1,000 players; seed: 20261109; observation window: `[2025-01-01, 2026-01-01)` UTC.
+
+This generator QA record supersedes the version 1.0.0 verification. It contains the requested distribution diagnostics, not a business analysis. The original two-duration session template has been replaced by a sequential time-budget simulation. The database schema is unchanged.
 
 ## Table counts
 
@@ -16,38 +18,56 @@ Verified on November 9, 2026 with Python 3.12.14, locked dependencies, and the i
 | `experiments` | 1 |
 | `experiment_variants` | 2 |
 | `players` | 1,000 |
-| `sessions` | 13,625 |
-| `events` | 133,074 |
-| `level_attempts` | 31,409 |
-| `purchases` | 676 |
+| `sessions` | 12,809 |
+| `level_attempts` | 45,761 |
+| `purchases` | 721 |
+| `events` | 181,594 |
 | `experiment_assignments` | 512 |
 | `experiment_exposures` | 512 |
 | `generation_runs` | 1 |
 
-## Checks and reproducibility
+## Session-duration diagnostics
 
-All **35 integrity checks passed with zero violations** on both full development loads. All **11 pytest tests passed**, including database constraint rejection, batch-size-independent ingestion, corruption detection, and interrupted-replacement rollback. Database tests run transactionally and preserve the loaded development data.
+All durations are seconds. Percentiles use linear interpolation; fractional percentiles do not imply sub-second stored durations.
 
-Two separate 1,000-player loads using batch sizes 5,000 and 997 produced identical row counts and canonical source-content SHA-256:
+| Statistic | Value |
+| --- | ---: |
+| Mean | 412.62 |
+| Median | 303.00 |
+| P25 | 174.00 |
+| P75 | 524.00 |
+| P90 | 830.00 |
+| P99 | 1,805.84 |
+| Minimum | 9 |
+| Maximum | 3,273 |
+| Distinct values | 1,506 |
+
+## Verification
+
+- All **38 integrity checks** passed with zero violations, including all previous checks plus attempt time limits, shop-after-gameplay, and tutorial-before-gameplay timing.
+- All **14 distribution-quality checks** passed. No segment or purchase check was skipped for the development profile.
+- All **18 automated tests** passed. Coverage includes temporal invariants, fixed-seed reproducibility, telemetry independence, batch-size independence, corruption rejection, interrupted-load rollback, and regressions for constant, two-valued, and uniform duration distributions.
+- The controlled engagement test uses a configurable tolerance and was rechecked after moving that tolerance into the configuration file.
+- Two complete development loads with batch sizes 5,000 and 997 produced identical row counts, duration diagnostics, and source-content checksum:
 
 ```text
-290af5668ef7d6497113a6eaf95232bbdaaa2e2810c6441e66e2ffcf28f131a4
+fc344fbdc5c8c37bf3fbe6174481a4dae0c4f773a4e0efc49a13a03bdce5da68
 ```
-
-The integration test additionally compares stored event-row digests after loads with batch sizes 1 and 731. Event payloads and every required lifecycle relationship pass validation. Schema initialization succeeded on a fresh database and on repeated application.
 
 ## Measured performance
 
 | Measurement | 5,000-row buffer | 997-row buffer |
 | --- | ---: | ---: |
-| Generation and ingestion (seconds) | 6.067 | 6.914 |
-| Validation (seconds) | 2.183 | 1.9 |
-| Total including commit (seconds) | 8.256 | 8.819 |
-| Peak Python process RSS (MiB) | 75.7 | 74.23 |
+| Generation and ingestion (seconds) | 8.055 | 9.131 |
+| Validation including distribution checks (seconds) | 2.203 | 2.891 |
+| Total including commit (seconds) | 10.266 | 12.039 |
+| Peak Python RSS (MiB) | 76.75 | 74.72 |
 | Maximum pending ingestion rows | 5000 | 997 |
 
-Peak memory is measured for the Python client process, not the PostgreSQL container or total host memory. These are local development measurements, not a production benchmark. Indexed event references avoid repeated full-table scans during integrity checks.
+Memory figures cover the Python client, not PostgreSQL or host-wide memory. Session planning holds only one session; loading uses bounded COPY buffers; quality checks stream primitive fields into bounded histograms. No raw dataset files are retained in the repository.
 
-The 50,000-player portfolio profile has **not been generated**. Full-scale performance and exact counts remain unverified. The loader and payload validator use bounded buffers/server-side streaming; PostgreSQL storage, indexes, and WAL will still grow with dataset size. The development population is suitable for checking the workflow, not guaranteed statistical power; reference campaign budgets are shared between profiles, so acquisition economics are not directly comparable across profile sizes.
+## Changed assumptions
 
-Only the synthetic development data is stored locally in the dedicated Docker volume. No raw dataset files, solved analytical queries, notebooks, dbt models, Tableau dashboards, or business conclusions were added.
+Intended play time is log-normal with within-player variation and shared engagement, progression, newcomer, and prior-failure effects. Attempts and pauses vary, and attempts are no longer squeezed into fixed slots. Interruption probability depends on active combat exposure. Shop browsing, checkout, and exit are individually timed. Repeated-failure continuation uses a fraction rather than raw failure count; same-day return delays are continuous; star outcomes depend noisily on skill and difficulty.
+
+See the maintainer-only [timing assumptions and QA thresholds](maintainer/behavior-and-timing.md) for parameters and limitations. No claim is made that these parameters were estimated from real game telemetry. The 50,000-player portfolio profile remains ungenerated and unbenchmarked, and its row-count targets need separate qualification under this model. The learner's SQL, notebooks, dbt workspace, dashboards, and Northstar project were not modified.

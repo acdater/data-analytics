@@ -3,6 +3,7 @@ from psycopg import sql
 from arcadia.common.config import ROOT, load_config
 from arcadia.common.events import validate_event
 from .load import TABLES
+from arcadia.generator.quality import validate_distributions
 
 
 def validate(connection, check_ranges=True):
@@ -36,4 +37,6 @@ def validate(connection, check_ranges=True):
     # PK/UNIQUE/FK constraints are active on COPY; check no constraint was left unvalidated.
     checks["unvalidated_constraints"] = connection.execute("""SELECT count(*) FROM pg_constraint c
         JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='arcadia' AND NOT c.convalidated""").fetchone()[0]
-    return {"row_counts": counts, "checks": checks, "passed": all(value == 0 for value in checks.values())}
+    distribution_quality = validate_distributions(connection)
+    return {"row_counts": counts, "checks": checks, "distribution_quality": distribution_quality,
+            "passed": all(value == 0 for value in checks.values()) and distribution_quality["passed"] is not False}

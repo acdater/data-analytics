@@ -6,6 +6,7 @@ import numpy as np
 from faker import Faker
 from .catalog import money
 from . import scenarios as s
+from .timing import behavior_config, log_seconds, play_budget
 
 
 def player_rows(config, catalog, player_id):
@@ -42,103 +43,155 @@ def player_rows(config, catalog, player_id):
     exposed = False
     start = registered + timedelta(seconds=int(rng.integers(15, 600)))
     release_adoption_delay = timedelta(days=int(rng.integers(0, 15)))
+    timing = behavior_config()["timing"]
+    previous_failure_fraction = 0.0
     for session_number in range(1, 401):
-        if start + timedelta(minutes=12) >= config.end:
+        # Do not force a short session against the administrative observation cutoff.
+        if start + timedelta(seconds=timing["maximum_session_seconds"]) >= config.end:
             break
         available = [r for r in catalog["game_releases"] if r["platform"] == platform and
                      r["released_at"] + (release_adoption_delay if r["version"] != "1.0.0" else timedelta()) <= start]
         release = available[-1]
         release_id = release["release_id"]
-        interrupted = rng.random() < s.RELEASE_INTERRUPTION[release["version"]]
-        attempt_count = int(rng.choice([2, 3], p=[.7, .3]))
-        duration = 20 + 180*attempt_count + 90
-        end = start + timedelta(seconds=duration)
         session_id = player_id*1000 + session_number
-        yield "sessions", dict(session_id=session_id, player_id=player_id, session_number=session_number,
-                               release_id=release_id, started_at=start, ended_at=end, duration_seconds=duration,
-                               status="interrupted" if interrupted else "completed")
-        sequence = 0
+        budget = play_budget(rng, engagement, level, session_number, previous_failure_fraction)
+        # Build only this session before emitting its authoritative end. This bounds
+        # memory independently of the number of players and preserves parent-first COPY.
+        actions, attempts = [], []
+        purchase = None
+        exposure = None
 
-        def event(kind, at, attempt_id=None, purchase_id=None, **payload):
-            nonlocal sequence
-            sequence += 1
-            # Omission creates sequence gaps, never renumbers retained events.
-            if (kind == "session_end" and telemetry.random() < s.END_LOSS_RATE) or (
-                kind == "reward_claimed" and telemetry.random() < s.REWARD_LOSS_RATE):
-                return []
-            delay = int(telemetry.integers(3600, 259201)) if telemetry.random() < s.LATE_RATE else int(telemetry.integers(0, 16))
-            props = {"schema_version": 1, **payload}
-            return [("events", dict(event_id=session_id*1000+sequence, session_id=session_id,
-                     event_sequence=sequence, event_timestamp=at, received_at=at+timedelta(seconds=delay),
-                     event_type=kind, attempt_id=attempt_id, purchase_id=purchase_id, properties=props))]
+        def action(kind, offset, attempt_id=None, purchase_id=None, **payload):
+            actions.append((kind, start+timedelta(seconds=offset), attempt_id, purchase_id, payload))
 
-        yield from event("session_start", start, network_type=telemetry.choice(["wifi", "cellular", None], p=[.62,.35,.03]))
+        action("session_start", 0)
+        cursor = log_seconds(rng, timing["login_median_seconds"], .55, 2, 15)
         if session_number == 1:
-            tutorial_time = start+timedelta(seconds=2)
+            tutorial_time = start+timedelta(seconds=cursor)
             if variant and tutorial_time < experiment["ends_at"]:
                 exposed = True
-                yield "experiment_exposures", dict(experiment_id=1, player_id=player_id, session_id=session_id, exposed_at=tutorial_time)
-            yield from event("tutorial_started", tutorial_time, tutorial_id="first_journey")
-            yield from event("tutorial_completed", start+timedelta(seconds=10), tutorial_id="first_journey")
+                exposure = dict(experiment_id=1, player_id=player_id, session_id=session_id, exposed_at=tutorial_time)
+            action("tutorial_started", cursor, tutorial_id="first_journey")
+            cursor += log_seconds(rng, timing["tutorial_median_seconds"], .4, 12, 45)
+            action("tutorial_completed", cursor, tutorial_id="first_journey")
         failures = 0
-        for attempt_number in range(1, attempt_count+1):
-            attempt_id = session_id*10+attempt_number
-            attempt_start = start+timedelta(seconds=15+(attempt_number-1)*180)
-            attempt_end = attempt_start+timedelta(seconds=int(rng.integers(50, 160)))
+        interrupted = False
+        interruption_rate = -math.log1p(-s.RELEASE_INTERRUPTION[release["version"]]) / timing["interruption_reference_seconds"]
+        # The interruption clock runs during active combat (renderer/app exit).
+        combat_until_interruption = float(rng.exponential(1 / interruption_rate))
+        while cursor + timing["attempt_minimum_seconds"] < budget:
+            attempt_number = len(attempts)+1
+            # Reserve enough ID space for variable-length sessions; no schema change.
+            attempt_id = session_id*1000+attempt_number
             difficulty = float(catalog["difficulty_lookup"][(level, release_id)])
             probability = float(np.clip(.83 + .22*(skill-.5) - .42*difficulty + .05*engagement, .12, .94))
             outcome = "completed" if rng.random() < probability else "failed"
-            if interrupted and attempt_number == attempt_count:
+            median = timing["attempt_median_seconds"] * (1+.3*difficulty) * (1-.18*skill)
+            if outcome == "failed":
+                median *= .85
+            upper = catalog["time_limit_lookup"][(level, release_id)]
+            attempt_seconds = log_seconds(rng, median, timing["attempt_log_sigma"], timing["attempt_minimum_seconds"], upper)
+            # Do not squeeze a whole level into the last few seconds of a budget.
+            # A first attempt can overrun a short intention; later attempts must fit.
+            if attempts and cursor + attempt_seconds > budget:
+                break
+            if combat_until_interruption < attempt_seconds:
+                attempt_seconds = max(1, int(math.ceil(combat_until_interruption)))
                 outcome = "abandoned"
-                attempt_end = end
-            yield "level_attempts", dict(attempt_id=attempt_id, session_id=session_id, release_id=release_id,
-                        level_id=level, attempt_number=attempt_number, started_at=attempt_start, ended_at=attempt_end, outcome=outcome)
+                interrupted = True
+            combat_until_interruption -= attempt_seconds
+            attempts.append(dict(attempt_id=attempt_id, session_id=session_id, release_id=release_id,
+                        level_id=level, attempt_number=attempt_number, started_at=start+timedelta(seconds=cursor),
+                        ended_at=start+timedelta(seconds=cursor+attempt_seconds), outcome=outcome))
             if previous_failed:
-                yield from event("level_retry", attempt_start, attempt_id=attempt_id, level_id=level)
-            yield from event("level_start", attempt_start, attempt_id=attempt_id, level_id=level)
+                action("level_retry", cursor, attempt_id=attempt_id, level_id=level)
+            action("level_start", cursor, attempt_id=attempt_id, level_id=level)
+            cursor += attempt_seconds
             if outcome == "completed":
-                yield from event("level_complete", attempt_end, attempt_id=attempt_id, level_id=level, stars=int(rng.integers(1,4)))
-                yield from event("reward_claimed", attempt_end, attempt_id=attempt_id, reward_type="coins", quantity=10+level)
+                star_quality = float(np.clip(.25+.5*skill-.12*difficulty, .1, .8))
+                stars = 1 + int(rng.binomial(2, star_quality))
+                action("level_complete", cursor, attempt_id=attempt_id, level_id=level, stars=stars)
+                action("reward_claimed", cursor, attempt_id=attempt_id, reward_type="coins", quantity=10+level)
                 level = min(level+1, 100)
             elif outcome == "failed":
-                yield from event("player_died", attempt_end, attempt_id=attempt_id, cause="enemy")
-                yield from event("level_failed", attempt_end, attempt_id=attempt_id, level_id=level, reason="health_depleted")
+                action("player_died", cursor, attempt_id=attempt_id, cause="enemy")
+                action("level_failed", cursor, attempt_id=attempt_id, level_id=level, reason="health_depleted")
                 failures += 1
             previous_failed = outcome == "failed"
-        # Interrupted sessions terminate during the final attempt and never enter the shop.
-        if not interrupted and rng.random() < (.28+.18*engagement if payer else .025):
-            shop_at = end-timedelta(seconds=50)
-            yield from event("shop_opened", shop_at, entry_point="session_summary")
+            if interrupted:
+                break
+            # Repeated failure can end play early; it does not deterministically force exit.
+            if failures > 1 and rng.random() < .10*(1-engagement):
+                break
+            menu_seconds = log_seconds(rng, timing["menu_median_seconds"]*(1+.15*failures), .6, 3, 90)
+            if cursor + menu_seconds + timing["attempt_minimum_seconds"] >= budget:
+                break
+            cursor += menu_seconds
+        if not attempts:
+            raise ValueError("Timing configuration leaves no room for gameplay")
+        # Shop visits remain after gameplay, but dwell/checkout/exit are separate
+        # variable actions rather than fixed offsets from an invented session end.
+        shop_probability = (.28+.18*engagement if payer else .025) * min(1.25, .65+cursor/600)
+        if not interrupted and rng.random() < shop_probability:
+            action("shop_opened", cursor, entry_point="session_summary")
+            cursor += log_seconds(rng, 35, .65, 8, timing["browse_maximum_seconds"])
             if payer and rng.random() < (.85 if heavy_payer else .65):
                 item = catalog["items"][int(rng.choice(5, p=[.12,.25,.45,.10,.08] if heavy_payer else [.50,.16,.02,.20,.12]))]
                 currency = "GBP" if country == "GB" else "EUR" if country in ("DE", "FR") else "USD"
-                initiated = end-timedelta(seconds=40)
+                initiated = start+timedelta(seconds=cursor)
                 rate_date = initiated.date()
                 rate = catalog["rate_lookup"][(rate_date, currency)]
                 amount = money(item["base_price_usd"] / rate)
                 status = str(rng.choice(["completed","failed","pending"], p=[.94,.05,.01]))
-                resolved = initiated+timedelta(seconds=5) if status != "pending" else None
-                yield "purchases", dict(purchase_id=session_id, session_id=session_id, player_id=player_id,
+                action("purchase_started", cursor, purchase_id=session_id, item_id=item["item_id"])
+                cursor += log_seconds(rng, 10, .65, 3, timing["checkout_maximum_seconds"])
+                resolved = start+timedelta(seconds=cursor) if status != "pending" else None
+                purchase = dict(purchase_id=session_id, session_id=session_id, player_id=player_id,
                             item_id=item["item_id"], initiated_at=initiated, resolved_at=resolved, status=status,
                             currency=currency, rate_date=rate_date, amount=amount,
                             revenue_usd=money(amount*rate) if status == "completed" else Decimal("0.00"))
-                yield from event("purchase_started", initiated, purchase_id=session_id, item_id=item["item_id"])
                 if status == "completed":
-                    yield from event("purchase_completed", resolved, purchase_id=session_id, item_id=item["item_id"])
+                    action("purchase_completed", cursor, purchase_id=session_id, item_id=item["item_id"])
         if not interrupted:
-            yield from event("session_end", end, reason="normal")
+            cursor += log_seconds(rng, 12, .6, 3, timing["exit_maximum_seconds"])
+            action("session_end", cursor, reason="normal")
+        duration = cursor
+        end = start+timedelta(seconds=duration)
+        yield "sessions", dict(session_id=session_id, player_id=player_id, session_number=session_number,
+                               release_id=release_id, started_at=start, ended_at=end, duration_seconds=duration,
+                               status="interrupted" if interrupted else "completed")
+        if exposure:
+            yield "experiment_exposures", exposure
+        for attempt in attempts:
+            yield "level_attempts", attempt
+        if purchase:
+            yield "purchases", purchase
+        if len(actions) >= 1000:
+            raise ValueError("Session exceeds stable event ID capacity")
+        for sequence, (kind, at, attempt_id, purchase_id, payload) in enumerate(actions, 1):
+            if kind == "session_start":
+                payload = {"network_type": telemetry.choice(["wifi", "cellular", None], p=[.62,.35,.03])}
+            if (kind == "session_end" and telemetry.random() < s.END_LOSS_RATE) or (
+                kind == "reward_claimed" and telemetry.random() < s.REWARD_LOSS_RATE):
+                continue
+            delay = int(telemetry.integers(3600, 259201)) if telemetry.random() < s.LATE_RATE else int(telemetry.integers(0, 16))
+            yield "events", dict(event_id=session_id*1000+sequence, session_id=session_id,
+                     event_sequence=sequence, event_timestamp=at, received_at=at+timedelta(seconds=delay),
+                     event_type=kind, attempt_id=attempt_id, purchase_id=purchase_id,
+                     properties={"schema_version": 1, **payload})
+        previous_failure_fraction = failures/len(attempts)
         hazard = (s.EARLY_EXIT_BASE+.19*(1-engagement)) if session_number <= 3 else (s.ESTABLISHED_EXIT_BASE+.032*(1-engagement))
-        hazard += .009*failures + (.035 if interrupted else 0)
+        hazard += .018*previous_failure_fraction + (.035 if interrupted else 0)
         if exposed and variant == "treatment" and session_number <= 3:
             hazard -= s.TUTORIAL_EFFECT
         if rng.random() < hazard:
             break
         # Time gaps depend on persistent engagement; weekend and evening activity vary.
         if rng.random() < .15*engagement:
-            start = end+timedelta(hours=int(rng.integers(2, 7)))
+            start = end+timedelta(seconds=log_seconds(rng, 10800, .6, 1800, 43200))
         else:
-            gaps = np.arange(1, 15)
-            weights = np.exp(-gaps/(1.2+3*(1-engagement)))
+            gaps = np.arange(1, 46)
+            weights = np.exp(-gaps/(1.2+3*(1-engagement)+.5*previous_failure_fraction))
             weights *= np.array([1.25 if (end+timedelta(days=int(g))).weekday() >= 5 else 1 for g in gaps])
             gap = int(rng.choice(gaps, p=weights/weights.sum()))
             hours = np.arange(24)
@@ -151,6 +204,7 @@ def prepare_catalog(catalog):
     return {**catalog,
             "rate_lookup": {(r["rate_date"], r["currency"]): r["usd_per_unit"] for r in catalog["exchange_rates"]},
             "difficulty_lookup": {(r["level_id"], r["release_id"]): r["difficulty"] for r in catalog["level_configurations"]},
+            "time_limit_lookup": {(r["level_id"], r["release_id"]): r["time_limit_seconds"] for r in catalog["level_configurations"]},
             "spend_lookup": {(r["campaign_id"], r["spend_date"]): r["spend_usd"] for r in catalog["campaign_daily_spend"]}}
 
 

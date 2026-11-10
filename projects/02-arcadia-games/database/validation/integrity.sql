@@ -134,3 +134,12 @@ WHERE r.event_type='level_retry' AND r.event_sequence >= s.event_sequence;
 -- check: outcome_event_order
 SELECT count(*) FROM events e JOIN events s ON s.attempt_id=e.attempt_id AND s.event_type='level_start'
 WHERE e.event_type IN ('level_complete','level_failed','player_died','reward_claimed') AND e.event_sequence <= s.event_sequence;
+-- check: attempt_time_limit
+SELECT count(*) FROM level_attempts a JOIN level_configurations c USING (level_id,release_id)
+WHERE a.ended_at-a.started_at > c.time_limit_seconds * INTERVAL '1 second';
+-- check: shop_after_gameplay
+SELECT count(*) FROM events e WHERE e.event_type='shop_opened' AND EXISTS (
+ SELECT 1 FROM level_attempts a WHERE a.session_id=e.session_id AND a.ended_at > e.event_timestamp);
+-- check: tutorial_before_gameplay
+SELECT count(*) FROM events e WHERE e.event_type='tutorial_completed' AND EXISTS (
+ SELECT 1 FROM level_attempts a WHERE a.session_id=e.session_id AND a.started_at < e.event_timestamp);

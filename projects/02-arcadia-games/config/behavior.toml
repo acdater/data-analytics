@@ -1,0 +1,46 @@
+# Synthetic design assumptions, not estimates from real game telemetry.
+[timing]
+play_median_seconds = 280.0
+play_log_sigma = 0.75
+engagement_log_effect = 0.9
+progression_log_effect = 0.20
+new_player_multiplier = 0.75
+previous_failure_log_effect = 0.18
+minimum_play_seconds = 50
+first_play_minimum_seconds = 100
+maximum_session_seconds = 3600
+login_median_seconds = 7.0
+tutorial_median_seconds = 30.0
+attempt_median_seconds = 90.0
+attempt_log_sigma = 0.38
+attempt_minimum_seconds = 20
+menu_median_seconds = 16.0
+exit_maximum_seconds = 60
+browse_maximum_seconds = 180
+checkout_maximum_seconds = 90
+interruption_reference_seconds = 600.0
+
+[quality]
+minimum_sessions = 1000
+minimum_segment_sessions = 250
+minimum_distinct_durations = 300
+minimum_cv = 0.45
+maximum_cv = 1.6
+minimum_mean_median_ratio = 1.12
+minimum_p90_median_ratio = 1.8
+maximum_p99_seconds = 3300
+minimum_duration_seconds = 3
+maximum_duration_seconds = 3600
+maximum_modal_share = 0.03
+minimum_short_share = 0.03
+maximum_short_seconds = 180
+minimum_long_share = 0.02
+minimum_long_seconds = 900
+minimum_returning_first_median_ratio = 1.05
+maximum_returning_first_median_ratio = 3.5
+returning_session_number = 5
+minimum_attempt_count_values = 6
+minimum_attempt_duration_values = 80
+minimum_purchase_delay_values = 12
+minimum_purchases = 50
+controlled_engagement_ratio_tolerance = 0.20
