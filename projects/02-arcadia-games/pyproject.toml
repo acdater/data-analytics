@@ -5,10 +5,18 @@ description = "Reproducible synthetic operational data for Dungeon Rush analytic
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "sqlalchemy>=2.0,<3", "psycopg[binary]>=3.2,<4", "faker>=37,<41",
-  "numpy>=2.2,<3", "pandas>=2.2,<4", "matplotlib>=3.9,<4",
-  "seaborn>=0.13,<1", "scipy>=1.15,<2", "jupyterlab>=4.3,<5",
-  "ipykernel>=6.29,<8", "python-dotenv>=1,<2",
+  "sqlalchemy>=2.0,<3",
+  "psycopg[binary]>=3.2,<4",
+  "faker>=37,<41",
+  "numpy>=2.2,<3",
+  "pandas>=2.2,<4",
+  "matplotlib>=3.9,<4",
+  "seaborn>=0.13,<1",
+  "scipy>=1.15,<2",
+  "jupyterlab>=4.3,<5",
+  "ipykernel>=6.29,<8",
+  "python-dotenv>=1,<2",
+  "statsmodels>=0.15.0",
 ]
 [dependency-groups]
 dev = ["pytest>=8,<10"]
